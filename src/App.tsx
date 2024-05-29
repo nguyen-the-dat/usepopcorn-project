@@ -94,14 +94,17 @@ function App() {
   function handleDeleteWatch(id) {
     setWatched((watched) => watched.filter((movie) => movie.imdbID !== id));
   }
+
   useEffect(
     function () {
+      const controller = new AbortController();
       async function fetchMovie() {
         try {
           setIsLoading(true);
           setError("");
           const res = await fetch(
-            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`
+            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`,
+            { signal: controller.signal }
           );
           if (!res.ok) {
             throw new Error("Some thing went wrong with feching movies");
@@ -112,10 +115,13 @@ function App() {
             throw new Error("Movie not found");
           }
           setMovies(data.Search);
+          setError("");
           setIsLoading(false);
         } catch (error) {
           console.log(error.message);
-          setError(error.message);
+          if (err.name !== "AbortError") {
+            setError(error.message);
+          }
         } finally {
           setIsLoading(false);
         }
@@ -125,7 +131,11 @@ function App() {
         setError("");
         return;
       }
+      handleCloseMovie();
       fetchMovie();
+      return function () {
+        controller.abort();
+      };
     },
     [query]
   );
@@ -346,6 +356,21 @@ function MovieDetail({ selectedId, onCloseMovie, onAddWatched, watched }) {
     Genre: genre,
   } = movie;
   console.log(title, year);
+
+  useEffect(function () {
+    function callback(e) {
+      if (e.code === "Escape") {
+        onCloseMovie();
+        console.log("CLOSING");
+      }
+    }
+    document.addEventListener("keydown", callback);
+
+    return function () {
+      document.removeEventListener("keydown", callback);
+    };
+  }, []);
+
   useEffect(() => {
     async function fetchMovieDetails() {
       try {
@@ -384,6 +409,17 @@ function MovieDetail({ selectedId, onCloseMovie, onAddWatched, watched }) {
     onAddWatched(newWatchedMovie);
     onCloseMovie();
   }
+  useEffect(
+    function () {
+      if (!title) return;
+      document.title = `Movie | ${title}`;
+      return function () {
+        document.title = "usePopcorn";
+        console.log("Clean up!@");
+      };
+    },
+    [title, selectedId]
+  );
   return (
     <div className={"detail"}>
       {isLoading ? (
